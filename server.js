@@ -18,7 +18,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 
-import { adminAuth } from './admin/adminAuth.js';
+import { adminAuth } from './adminAuth.js';
 import { flameAIShield } from './shield.js';
 import { geminiTrainer } from './geminiTrainer.js';
 import { connectingLink } from './connectingLink.js';
