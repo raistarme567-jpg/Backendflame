@@ -1,79 +1,35 @@
-# Flame App Store (FAS) — Backend Server
+# Flame App Store (FAS) - Backend Architecture & Deployment Guide
 
-Standalone, decoupled REST API backend for the **Flame App Store (FAS)** ecosystem.
-Built with Node.js, Express, Prisma ORM, 20-AI Shield Security Network, and Gemini AI Trainer.
+This directory (`/backend-root/backend/`) is completely decoupled and isolated so it can run independently on any cloud provider, VPS, or server.
 
----
+## Folder Contents
+- `package.json` - Complete production Node.js package dependencies for the backend.
+- `server.js` - Standalone Express server containing all FAS API routes and modules.
+- `admin/adminAuth.js` - Isolated Admin File for generating 1-month (30-day) secret authorization codes.
+- `shield.js` - 20-AI Security Shield & Flame AI Commander architecture.
+- `connectingLink.js` - Encrypted Connecting Link bridge between frontend and backend.
+- `geminiTrainer.js` - Gemini Trainer router with Admin Kill-Switch (`DESTROY TRAINER`).
+- `infinityAiTranslator.js` - Infinity Language AI Translation engine.
+- `.env.example` - Sample environment configuration.
 
-## 📁 Architecture & File Structure
+## How to Deploy / Run
 
-```text
-backend-root/
-├── .env.example            # Environment variables template
-├── .gitignore              # Git ignore rules
-├── Dockerfile              # Production container build
-├── docker-compose.yml      # Multi-container orchestration (Backend + Postgres)
-├── firestore.rules         # Security & verification rules for Firestore
-├── package.json            # Backend dependencies & scripts
-├── tsconfig.json           # TypeScript configuration
-├── server.ts               # Express API entry point (CORS enabled)
-├── prisma/
-│   └── schema.prisma       # Database schema (PostgreSQL)
-├── server/
-│   ├── admin/              # Admin authorization & secret code engine
-│   ├── connectingLink.ts   # Secure link between frontend and backend
-│   ├── geminiTrainer.ts    # AI trainer interface with destroy/restore controls
-│   ├── infinityAiTranslator.ts # Infinity language translation core
-│   └── shield.ts           # 20-AI Shield defense network
-└── src/
-    ├── lib/mockData.ts     # In-memory fallback and seed data
-    └── types/index.ts      # Shared backend data contracts
-```
+1. **Install Dependencies:**
+   ```bash
+   npm install
+   ```
 
----
+2. **Configure Environment:**
+   Copy `.env.example` to `.env` and insert your Gemini API Key if desired:
+   ```bash
+   cp .env.example .env
+   ```
 
-## 🚀 Quick Start (Standalone Local Run)
+3. **Start the Backend Server:**
+   ```bash
+   npm start
+   ```
+   The backend will start listening on port `5000` (or your configured `PORT`).
 
-### 1. Prerequisites
-- Node.js >= 18.0.0
-- npm or bun
-
-### 2. Install Dependencies
-```bash
-cd backend-root
-npm install
-```
-
-### 3. Configure Environment
-```bash
-cp .env.example .env
-# Edit .env and supply your GEMINI_API_KEY and DATABASE_URL
-```
-
-### 4. Run Development Server
-```bash
-npm run dev
-```
-The server will start at: `http://localhost:5000`
-
-### 5. Health Check
-```bash
-curl http://localhost:5000/api/health
-```
-
----
-
-## 🐳 Docker Deployment
-
-To launch the backend along with a PostgreSQL database:
-```bash
-docker compose up -d
-```
-Backend will be live on port `5000` with automated health monitoring.
-
----
-
-## 🔒 Security Features
-- **CORS Readiness:** Configured to accept requests from frontend origin via `CORS_ORIGIN` env var.
-- **20-AI Shield Security Network:** Continuous monitoring against malicious injections and unverified uploads.
-- **Admin Secret Authorization:** 30-day token validation system for verified developer uploads.
+4. **Connecting Frontend to Backend:**
+   Point your frontend's `VITE_BACKEND_URL` or proxy to `http://your-server-ip:5000`.

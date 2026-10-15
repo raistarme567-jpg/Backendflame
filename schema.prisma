@@ -1,0 +1,430 @@
+// Flame App Store (FAS) — Production Prisma Schema
+// Database: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  DEVELOPER
+  ADMIN
+}
+
+enum AppStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  PUBLISHED
+  REJECTED
+  SUSPENDED
+}
+
+enum AuditAction {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+  PUBLISHED
+  SUSPENDED
+}
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  passwordHash     String
+  name             String
+  avatarUrl        String?
+  role             UserRole          @default(USER)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  
+  developerProfile DeveloperProfile?
+  reviews          Review[]
+  favorites        Favorite[]
+  downloads        Download[]
+  refreshTokens    RefreshToken[]
+  notifications    Notification[]
+  moderatedReviews SubmissionReview[]
+
+  @@index([email])
+}
+
+model DeveloperProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  developerName   String
+  website         String?
+  supportEmail    String
+  verified        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  apps            App[]
+
+  @@index([developerName])
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  icon        String
+  description String?
+  createdAt   DateTime @default(now())
+  
+  apps        App[]
+}
+
+model App {
+  id               String            @id @default(uuid())
+  name             String
+  packageName      String            @unique // Unique Android reverse domain (e.g. com.flame.browser)
+  developerId      String
+  developer        DeveloperProfile  @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  categoryId       String
+  category         Category          @relation(fields: [categoryId], references: [id])
+  shortDescription String
+  fullDescription  String
+  iconUrl          String
+  headerBannerUrl  String?
+  status           AppStatus         @default(DRAFT)
+  statusReason     String?
+  featured         Boolean           @default(false)
+  rating           Float             @default(0.0)
+  ratingCount      Int               @default(0)
+  downloadCount    Int               @default(0)
+  tags             String[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  
+  versions         AppVersion[]
+  screenshots      AppScreenshot[]
+  permissions      AppPermission[]
+  reviews          Review[]
+  favorites        Favorite[]
+  downloads        Download[]
+  submissions      Submission[]
+  submissionLogs   SubmissionReview[]
+
+  @@index([packageName])
+  @@index([status])
+  @@index([categoryId])
+  @@index([rating])
+  @@index([downloadCount])
+}
+
+model AppVersion {
+  id              String   @id @default(uuid())
+  appId           String
+  app             App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  versionName     String   // e.g. 1.2.0
+  versionCode     Int      // e.g. 12
+  releaseNotes    String?
+  apkFileName     String
+  apkFileSize     String   // e.g. 28.4 MB
+  apkFileBytes    BigInt
+  sha256          String   // cryptographic checksum
+  minAndroid      String   // e.g. Android 10 (API 29)
+  targetAndroid   String   // e.g. Android 15 (API 35)
+  uploadDate      DateTime @default(now())
+  isLatest        Boolean  @default(true)
+
+  @@index([appId, versionCode])
+}
+
+model AppScreenshot {
+  id        String   @id @default(uuid())
+  appId     String
+  app       App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  imageUrl  String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([appId])
+}
+
+model AppPermission {
+  id          String   @id @default(uuid())
+  appId       String
+  app         App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  name        String   // e.g. android.permission.INTERNET
+  description String?
+
+  @@index([appId])
+}
+
+model Review {
+  id           String   @id @default(uuid())
+  appId        String
+  app          App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating       Int      // 1 to 5
+  title        String
+  comment      String
+  helpfulCount Int      @default(0)
+  device       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([appId, userId]) // 1 active review per user per app
+  @@index([appId])
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  appId     String
+  app       App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([appId, userId])
+}
+
+model Download {
+  id          String   @id @default(uuid())
+  appId       String
+  app         App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  versionName String
+  ipAddress   String?
+  userAgent   String?
+  downloadedAt DateTime @default(now())
+
+  @@index([appId, downloadedAt])
+}
+
+model Submission {
+  id          String    @id @default(uuid())
+  appId       String
+  app         App       @relation(fields: [appId], references: [id], onDelete: Cascade)
+  versionCode Int
+  notes       String?
+  submittedAt DateTime  @default(now())
+}
+
+model SubmissionReview {
+  id             String      @id @default(uuid())
+  appId          String
+  app            App         @relation(fields: [appId], references: [id], onDelete: Cascade)
+  reviewerId     String?
+  reviewer       User?       @relation(fields: [reviewerId], references: [id], onDelete: SetNull)
+  reviewerName   String
+  action         AuditAction
+  previousStatus AppStatus
+  newStatus      AppStatus
+  reason         String?
+  createdAt      DateTime    @default(now())
+
+  @@index([appId])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   // INFO | SUCCESS | WARNING | ALERT
+  read      Boolean  @default(false)
+  appId     String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+// ==========================================
+// TOURNAMENT & E-SPORTS REWARDS ECOSYSTEM
+// ==========================================
+
+enum TournamentStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+model Tournament {
+  id               String                 @id @default(uuid())
+  title            String
+  gameCategory     String                 // Free Fire, BGMI, COD Mobile, etc.
+  customGameName   String?
+  bannerUrl        String
+  entryFeeCoins    Int                    @default(0)
+  hostingFeeCoins  Int                    @default(50) // Coins spent by host to create
+  prizePoolCoins   Int
+  hostUserId       String
+  hostUserName     String
+  rules            String
+  matchSchedule    String                 // e.g. "Today 8:00 PM IST"
+  maxSlots         Int                    @default(100)
+  registeredCount  Int                    @default(0)
+  status           TournamentStatus       @default(UPCOMING)
+  winningUserId    String?
+  winnerName       String?
+  winnerInGameUid  String?
+  winnerPrizeCoins Int?
+  winnerProofUrl   String?
+  adminNotes       String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  completedAt      DateTime?
+
+  participants     TournamentParticipant[]
+
+  @@index([gameCategory, status])
+  @@index([hostUserId])
+}
+
+model TournamentParticipant {
+  id             String      @id @default(uuid())
+  tournamentId   String
+  tournament     Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  userId         String
+  userName       String
+  userEmail      String
+  inGameUid      String
+  ign            String
+  score          Int?        @default(0)
+  rank           Int?
+  prizeWonCoins  Int?        @default(0)
+  status         String      @default("REGISTERED") // REGISTERED | WINNER | ELIMINATED
+  registeredAt   DateTime    @default(now())
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId])
+  @@index([userId])
+}
+
+// Virtual Coins & Rewards Wallet
+model UserWallet {
+  id                 String             @id @default(uuid())
+  userId             String             @unique
+  coinsBalance       Int                @default(100) // Initial welcome coins
+  totalCoinsEarned   Int                @default(100)
+  totalCoinsSpent    Int                @default(0)
+  totalCoinsRedeemed Int                @default(0)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  transactions       CoinTransaction[]
+  redemptions        RedemptionRequest[]
+
+  @@index([userId])
+}
+
+model CoinTransaction {
+  id          String      @id @default(uuid())
+  walletId    String
+  wallet      UserWallet  @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  userId      String
+  amount      Int         // Positive for credit, negative for debit
+  type        String      // TOURNAMENT_WIN | HOST_TOURNAMENT_FEE | JOIN_ENTRY_FEE | BUY_COINS_BUNDLE | REDEMPTION | STORE_PURCHASE
+  title       String
+  description String
+  referenceId String?
+  createdAt   DateTime    @default(now())
+
+  @@index([walletId])
+  @@index([userId])
+}
+
+// Redemption & Withdrawal Requests (UPI, In-Game UID Top-ups, etc.)
+model RedemptionRequest {
+  id             String      @id @default(uuid())
+  userId         String
+  userEmail      String
+  userName       String
+  walletId       String
+  wallet         UserWallet  @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  coins          Int
+  payoutMethod   String      // UPI | FREE_FIRE_UID | BGMI_UID | PAYPAL | BANK_TRANSFER
+  payoutDetails  String      // UPI ID or bank account
+  inGameUid      String?     // In-game UID for direct diamonds / UC top-up
+  gameBundleName String?     // e.g. "Free Fire 520 Diamonds"
+  amountINR      Float
+  currency       String      @default("INR")
+  status         String      @default("PENDING") // PENDING | APPROVED | REJECTED
+  etaMessage     String      @default("आपका विथड्रॉ पेंडिंग में है, 24 घंटे में अप्रूव हो जाएगा। 24 घंटे बाद चेक करें")
+  adminRemarks   String?
+  createdAt      DateTime    @default(now())
+  processedAt    DateTime?
+
+  @@index([userId, status])
+}
+
+// Store Items & Digital Assets (Managed by Admin)
+model StoreItem {
+  id                String       @id @default(uuid())
+  title             String
+  category          String       // COINS_PACK | GAME_TOPUP | GIFT_BUNDLE | PREMIUM_PASS | DIGITAL_ASSET | BANNER
+  priceCoins        Int          @default(0)
+  priceINR          Float        @default(0)
+  priceUSD          Float        @default(0)
+  image             String
+  description       String
+  inGameItemReward  String?      // e.g. "520 Free Fire Diamonds" or "360 BGMI UC"
+  requiresInGameUid Boolean      @default(false)
+  requiresEmail     Boolean      @default(true)
+  stock             Int          @default(9999)
+  isFeatured        Boolean      @default(false)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  orders            StoreOrder[]
+
+  @@index([category])
+}
+
+model StoreOrder {
+  id            String     @id @default(uuid())
+  itemId        String
+  item          StoreItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  userId        String
+  userEmail     String
+  inGameUid     String?
+  coinsPaid     Int        @default(0)
+  amountPaidINR Float      @default(0)
+  paymentMethod String     // COINS | UPI | GATEWAY
+  status        String     @default("COMPLETED")
+  createdAt     DateTime   @default(now())
+
+  @@index([userId])
+  @@index([itemId])
+}
+
+model AdminUploadedFile {
+  id             String    @id @default(uuid())
+  title          String
+  fileType       String    // IMAGE_BANNER | APP_FILE | DIGITAL_PRODUCT
+  fileUrl        String
+  fileSize       String
+  mimeType       String
+  uploadedBy     String
+  activeInStore  Boolean   @default(true)
+  targetLink     String?
+  uploadedAt     DateTime  @default(now())
+
+  @@index([fileType])
+}
