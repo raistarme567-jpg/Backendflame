@@ -1,0 +1,35 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fas-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - CORS_ORIGIN=http://localhost:5173
+      - DATABASE_URL=postgresql://postgres:flamepassword@postgres-db:5432/flame_app_store?schema=public
+      - JWT_ACCESS_SECRET=flame_fas_access_super_secret_key_change_in_prod
+      - JWT_REFRESH_SECRET=flame_fas_refresh_super_secret_key_change_in_prod
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - postgres-db
+    restart: unless-stopped
+
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: fas-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=flamepassword
+      - POSTGRES_DB=flame_app_store
+    volumes:
+      - fas_postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  fas_postgres_data:

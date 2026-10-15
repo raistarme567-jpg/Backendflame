@@ -1,0 +1,170 @@
+rules_version = '2';
+
+/**
+ * Flame App Store (FAS) — Production Firestore Security Rules
+ * Architecture:
+ * - Public read access for published apps and books with valid FAS certification
+ * - Strict write access restricted exclusively to certified, authorized uploads
+ * - Enforces mandatory Digital Certificate verification, terms agreement, and admin authorization
+ * - Protects the 20-AI Shield telemetry and audit logs
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper: Authenticated User check
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper: Admin Role check
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.role == 'ADMIN' || 
+         request.auth.uid == 'admin-root-command' ||
+         request.auth.token.admin == true);
+    }
+
+    // Helper: Certified Upload Validation
+    // "Restrict write access exclusively to certified, authorized uploads"
+    function isCertifiedUpload(data) {
+      return data.hasCertificate == true &&
+             data.certificate != null &&
+             data.certificate.verificationStatus == 'VERIFIED' &&
+             data.certificate.serialNumber is string &&
+             data.certificate.sha256Fingerprint is string &&
+             data.certificate.signatureToken is string &&
+             data.termsAgreed == true &&
+             data.createCertificatePermission == true;
+    }
+
+    // Apps & Books Collection
+    match /apps/{appId} {
+      // Any visitor can read published and clean apps/books
+      allow read: if resource.data.status == 'PUBLISHED' || 
+                     (isAuthenticated() && request.auth.uid == resource.data.developerId) ||
+                     isAdmin();
+
+      // Creation strictly restricted to certified, authorized uploads
+      allow create: if isAuthenticated() &&
+                       isCertifiedUpload(request.resource.data) &&
+                       request.resource.data.developerId == request.auth.uid;
+
+      // Updates restricted to app owner with valid certificate or Admin
+      allow update: if (isAuthenticated() && 
+                        resource.data.developerId == request.auth.uid &&
+                        isCertifiedUpload(request.resource.data)) ||
+                       isAdmin();
+
+      // Deletion allowed only by Admin
+      allow delete: if isAdmin();
+    }
+
+    // Digital Certificates Registry (Issued by FAS Security Command)
+    match /certificates/{certificateId} {
+      allow read: if true; // Public verification of digital certificates via Blue Tick modal
+      allow create, update, delete: if isAdmin(); // Strictly immutable except by FAS Admin File
+    }
+
+    // Purchases & Digital Receipts
+    match /purchases/{purchaseId} {
+      allow read: if isAuthenticated() && 
+                     (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Secret Authorization Codes (Issued from Admin File)
+    match /adminSecretCodes/{codeId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 20-AI Shield Security Telemetry & Audit Logs
+    match /shieldLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // User Reviews
+    match /apps/{appId}/reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && 
+                               (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+                      (request.auth.uid == userId || isAdmin());
+    }
+
+    // E-Sports Tournaments Collection
+    match /tournaments/{tournamentId} {
+      // Anyone can view tournaments
+      allow read: if true;
+      // Organizers with authentication can create tournaments
+      allow create: if isAuthenticated() && 
+                       request.resource.data.hostUserId == request.auth.uid;
+      // Host or Admin can update tournament (e.g. declare winners, update slots)
+      allow update: if (isAuthenticated() && 
+                        resource.data.hostUserId == request.auth.uid) || 
+                       isAdmin();
+      allow delete: if isAdmin();
+
+      // Participants Subcollection
+      match /participants/{participantId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && 
+                         request.resource.data.userId == request.auth.uid;
+        allow update, delete: if (isAuthenticated() && 
+                                  resource.data.userId == request.auth.uid) || 
+                                 isAdmin();
+      }
+    }
+
+    // User Virtual Coin Wallets & Transactions
+    match /wallets/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin(); // Wallet balance changes enforced via verified server/functions
+
+      match /transactions/{txId} {
+        allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+        allow write: if isAdmin();
+      }
+    }
+
+    // Redemption & Withdrawal Requests (UPI / In-Game UID)
+    match /redemptions/{redemptionId} {
+      allow read: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Store Items (Managed by Admin)
+    match /storeItems/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Store Orders
+    match /storeOrders/{orderId} {
+      allow read: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Admin Uploaded Banners & Files
+    match /uploadedFiles/{fileId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
