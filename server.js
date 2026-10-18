@@ -232,6 +232,10 @@ app.post('/api/admin/payment-config', (req, res) => {
   res.json({ success: true, data: paymentConfig });
 });
 
+app.get('/', (req, res) => {
+  res.json({ status: 'active', message: 'Flame Software Suite Backend is Live & Running!' });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🔥 FAS Isolated Backend running on http://0.0.0.0:${PORT}`);
 });
