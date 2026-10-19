@@ -30,7 +30,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({
-  origin: ['https://flameappstore.netlify.app']
+  origin: ['https://flameappstore.netlify.app/']
 }));
 app.use(express.json({ limit: '5gb' }));
 app.use(express.urlencoded({ extended: true, limit: '5gb' }));
